@@ -4,6 +4,7 @@ import { auth } from '@clerk/nextjs/server';
 import OpenAI from 'openai';
 import { supabase } from '@/app/lib/supabase';
 import { FREE_MAX_BYTES, FREE_MONTHLY_SECONDS } from '@/app/lib/stripe';
+import { transcribeRateLimit } from '@/app/lib/ratelimit';
 
 export const maxDuration = 60;
 export const runtime = 'nodejs';
@@ -46,6 +47,16 @@ export async function POST(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: 'Sign in to start transcribing.', signIn: true }, { status: 401 });
+  }
+
+  // Rate limit: 10 requests per user per minute
+  const { success, limit, remaining, reset } = await transcribeRateLimit.limit(userId);
+  if (!success) {
+    const retryAfter = Math.ceil((reset - Date.now()) / 1000);
+    return NextResponse.json(
+      { error: `Too many requests. You can transcribe up to ${limit} files per minute. Try again in ${retryAfter}s.` },
+      { status: 429, headers: { 'Retry-After': String(retryAfter) } },
+    );
   }
 
   const formData = await req.formData();
