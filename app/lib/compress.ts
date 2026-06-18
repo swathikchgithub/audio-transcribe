@@ -10,6 +10,7 @@ export const CHUNK_DURATION_SECONDS = 4 * 60; // 4-minute segments
 export const COMPRESS_THRESHOLD_BYTES = 20 * 1024 * 1024; // 20 MB
 
 export const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif']);
+export const VIDEO_EXTS = new Set(['mp4', 'mov', 'avi', 'mkv', 'wmv', 'flv', 'm4v', '3gp']);
 
 export type AudioQuality = 'small' | 'balanced' | 'high';
 
@@ -144,6 +145,50 @@ export async function compressAndSplit(
 
   try { await ffmpeg.deleteFile(inputName); } catch { /* best-effort */ }
   return chunks;
+}
+
+// small/balanced also scale down resolution to maximize size reduction
+const VIDEO_QUALITY_FLAGS: Record<AudioQuality, string[]> = {
+  small:    ['-vf', 'scale=-2:480',  '-c:v', 'libx264', '-crf', '35', '-preset', 'fast',   '-c:a', 'aac', '-b:a', '96k'],
+  balanced: ['-vf', 'scale=-2:720',  '-c:v', 'libx264', '-crf', '28', '-preset', 'medium', '-c:a', 'aac', '-b:a', '128k'],
+  high:     [                        '-c:v', 'libx264', '-crf', '23', '-preset', 'medium', '-c:a', 'aac', '-b:a', '192k'],
+};
+
+export async function compressVideoForDownload(
+  file: File,
+  quality: AudioQuality = 'balanced',
+  onProgress?: (ratio: number) => void,
+): Promise<File> {
+  const ffmpeg = await getFFmpeg();
+
+  const ext = file.name.split('.').pop()?.toLowerCase() || 'mp4';
+  const inputName = `vid_input.${ext}`;
+  const outputName = 'vid_output.mp4';
+
+  const handler = ({ progress }: { progress: number }) => {
+    onProgress?.(Math.max(0, Math.min(1, progress)));
+  };
+  ffmpeg.on('progress', handler);
+
+  try {
+    await ffmpeg.writeFile(inputName, await fetchFile(file));
+    await ffmpeg.exec([
+      '-i', inputName,
+      ...VIDEO_QUALITY_FLAGS[quality],
+      '-movflags', '+faststart',
+      outputName,
+    ]);
+
+    const data = await ffmpeg.readFile(outputName);
+    const bytes = data instanceof Uint8Array ? data : new TextEncoder().encode(String(data));
+    const blob = new Blob([new Uint8Array(bytes).buffer], { type: 'video/mp4' });
+    const name = file.name.replace(/\.[^.]+$/, '') + '_compressed.mp4';
+    return new File([blob], name, { type: 'video/mp4' });
+  } finally {
+    ffmpeg.off('progress', handler);
+    try { await ffmpeg.deleteFile(inputName); } catch { /* virtual FS cleanup */ }
+    try { await ffmpeg.deleteFile(outputName); } catch { /* virtual FS cleanup */ }
+  }
 }
 
 export async function compressAudioForDownload(

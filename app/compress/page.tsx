@@ -2,12 +2,12 @@
 
 import { useState, useRef, DragEvent, ChangeEvent } from 'react';
 import Link from 'next/link';
-import { IMAGE_EXTS, IMAGE_QUALITY, type AudioQuality } from '../lib/compress';
+import { IMAGE_EXTS, IMAGE_QUALITY, VIDEO_EXTS, type AudioQuality } from '../lib/compress';
 
 type Stage = 'idle' | 'compressing';
-type FileCategory = 'audio' | 'image' | 'unsupported';
+type FileCategory = 'audio' | 'image' | 'video' | 'unsupported';
 
-const AUDIO_EXTS = new Set(['mp3', 'mp4', 'mpeg', 'mpga', 'm4a', 'wav', 'webm', 'ogg', 'flac']);
+const AUDIO_EXTS = new Set(['mp3', 'mpeg', 'mpga', 'm4a', 'wav', 'webm', 'ogg', 'flac']);
 
 const QUALITY_META: Record<AudioQuality, { label: string; desc: string }> = {
   small:    { label: 'Small',        desc: 'Smallest file, some quality loss' },
@@ -24,6 +24,7 @@ function getCategory(file: File): FileCategory {
   const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
   if (AUDIO_EXTS.has(ext)) return 'audio';
   if (IMAGE_EXTS.has(ext)) return 'image';
+  if (VIDEO_EXTS.has(ext)) return 'video';
   return 'unsupported';
 }
 
@@ -47,7 +48,7 @@ export default function CompressPage() {
     if (!selected) return;
     if (getCategory(selected) === 'unsupported') {
       const ext = selected.name.split('.').pop()?.toLowerCase() ?? 'unknown';
-      setError(`".${ext}" files are not supported. Drop an audio or image file (JPG, PNG, WebP, GIF, MP3, M4A, WAV, etc.).`);
+      setError(`".${ext}" files are not supported. Drop an audio, video, or image file (MP3, M4A, WAV, MP4, MOV, JPG, PNG, etc.).`);
       return;
     }
     setFile(selected);
@@ -81,6 +82,9 @@ export default function CompressPage() {
         const { compressImageForDownload } = await import('../lib/compress');
         compressed = await compressImageForDownload(file, IMAGE_QUALITY[quality]);
         setProgress(1);
+      } else if (fileCategory === 'video') {
+        const { compressVideoForDownload } = await import('../lib/compress');
+        compressed = await compressVideoForDownload(file, quality, setProgress);
       } else {
         const { compressAudioForDownload } = await import('../lib/compress');
         compressed = await compressAudioForDownload(file, quality, setProgress);
@@ -104,7 +108,7 @@ export default function CompressPage() {
   };
 
   const cancel = async () => {
-    if (fileCategory === 'audio') {
+    if (fileCategory === 'audio' || fileCategory === 'video') {
       const { cancelCompression } = await import('../lib/compress');
       cancelCompression();
     }
@@ -138,7 +142,7 @@ export default function CompressPage() {
             Compress File
           </h1>
           <p className="text-zinc-500 text-sm">
-            Reduce audio and image file sizes for uploading.{' '}
+            Reduce audio, video, and image file sizes for uploading.{' '}
             <span className="text-zinc-600">Processed entirely in your browser — nothing is uploaded.</span>
           </p>
         </header>
@@ -162,7 +166,7 @@ export default function CompressPage() {
           <input
             ref={inputRef}
             type="file"
-            accept="audio/*,image/jpeg,image/png,image/webp,image/gif"
+            accept="audio/*,video/*,image/jpeg,image/png,image/webp,image/gif"
             onChange={(e: ChangeEvent<HTMLInputElement>) => handleFile(e.target.files?.[0] ?? null)}
             className="hidden"
           />
@@ -173,6 +177,10 @@ export default function CompressPage() {
                 {fileCategory === 'audio' ? (
                   <svg className="w-5 h-5 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                  </svg>
+                ) : fileCategory === 'video' ? (
+                  <svg className="w-5 h-5 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
                   </svg>
                 ) : (
                   <svg className="w-5 h-5 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -207,7 +215,7 @@ export default function CompressPage() {
                 <p className="font-medium text-zinc-300">Drop a file here</p>
                 <p className="text-sm text-zinc-600 mt-1">or click to browse</p>
               </div>
-              <p className="text-xs text-zinc-700">Audio (MP3, M4A, WAV, OGG…) · Images (JPG, PNG, WebP, GIF)</p>
+              <p className="text-xs text-zinc-700">Audio (MP3, M4A, WAV…) · Video (MP4, MOV, MKV…) · Images (JPG, PNG, WebP…)</p>
             </div>
           )}
         </div>
@@ -225,7 +233,7 @@ export default function CompressPage() {
                 style={{ width: `${Math.round(progress * 100)}%` }}
               />
             </div>
-            {fileCategory === 'audio' && (
+            {(fileCategory === 'audio' || fileCategory === 'video') && (
               <p className="text-xs text-zinc-700">First run downloads ffmpeg.wasm (~30 MB) — cached after that.</p>
             )}
           </div>
