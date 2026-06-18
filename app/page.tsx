@@ -707,7 +707,7 @@ export default function Home() {
                 </svg>
               </div>
               <div>
-                <p className="font-medium text-zinc-300">Drop an audio file here</p>
+                <p className="font-medium text-zinc-300">{mode === 'compress' ? 'Drop a file here' : 'Drop an audio file here'}</p>
                 <p className="text-sm text-zinc-600 mt-1">or click to browse</p>
               </div>
               <p className="text-xs text-zinc-700">
