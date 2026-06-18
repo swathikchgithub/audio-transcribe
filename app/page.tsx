@@ -4,11 +4,11 @@ import { useState, useRef, useEffect, DragEvent, ChangeEvent } from 'react';
 import { useUser, SignInButton, UserButton } from '@clerk/nextjs';
 import Link from 'next/link';
 import type { HistoryItem } from './lib/history';
-import { IMAGE_EXTS, IMAGE_QUALITY, type AudioQuality } from './lib/compress';
+import { IMAGE_EXTS, IMAGE_QUALITY, VIDEO_EXTS, type AudioQuality } from './lib/compress';
 import { WHISPER_LANGUAGES } from './lib/languages';
 
 const ACCEPTED_AUDIO = '.mp3,.mp4,.mpeg,.mpga,.m4a,.wav,.webm,.ogg,.flac';
-const ACCEPTED_COMPRESS = 'audio/*,image/jpeg,image/png,image/webp,image/gif';
+const ACCEPTED_COMPRESS = 'audio/*,video/*,image/jpeg,image/png,image/webp,image/gif';
 const AUDIO_EXTS = new Set(['mp3', 'mp4', 'mpeg', 'mpga', 'm4a', 'wav', 'webm', 'ogg', 'flac']);
 const MAX_FILE_SIZE = 100 * 1024 * 1024;       // Pro limit
 const FREE_MAX_FILE_SIZE = 25 * 1024 * 1024;   // Free limit
@@ -256,8 +256,9 @@ export default function Home() {
     const isImage = IMAGE_EXTS.has(ext);
 
     if (mode === 'compress') {
-      if (!isAudio && !isImage) {
-        setError(`".${ext}" files are not supported. Drop an audio or image file.`);
+      const isVideo = VIDEO_EXTS.has(ext);
+      if (!isAudio && !isImage && !isVideo) {
+        setError(`".${ext}" files are not supported. Drop an audio, video, or image file.`);
         return;
       }
     } else {
@@ -330,6 +331,9 @@ export default function Home() {
         const { compressImageForDownload } = await import('./lib/compress');
         compressed = await compressImageForDownload(file, IMAGE_QUALITY[quality]);
         setCompressProgress(1);
+      } else if (VIDEO_EXTS.has(ext)) {
+        const { compressVideoForDownload } = await import('./lib/compress');
+        compressed = await compressVideoForDownload(file, quality, setCompressProgress);
       } else {
         const { compressAudioForDownload } = await import('./lib/compress');
         compressed = await compressAudioForDownload(file, quality, setCompressProgress);
@@ -637,7 +641,7 @@ export default function Home() {
               <div className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/20">
                 <p className="text-xs text-violet-400 font-semibold uppercase tracking-widest mb-2">Compress</p>
                 <ul className="space-y-1.5 text-xs text-zinc-500 leading-relaxed">
-                  <li>Reduces file size for <span className="text-zinc-400">audio and images</span> (JPG, PNG, WebP, GIF)</li>
+                  <li>Reduces file size for <span className="text-zinc-400">audio, video, and images</span> (MP4, MOV, JPG, PNG…)</li>
                   <li>Runs entirely in your browser — nothing is uploaded</li>
                   <li>No sign-in required · pick Small / Balanced / High Quality</li>
                 </ul>
@@ -708,7 +712,7 @@ export default function Home() {
               </div>
               <p className="text-xs text-zinc-700">
                 {mode === 'compress'
-                  ? 'Audio (MP3, M4A, WAV…) · Images (JPG, PNG, WebP, GIF)'
+                  ? 'Audio (MP3, M4A, WAV…) · Video (MP4, MOV, MKV…) · Images (JPG, PNG…)'
                   : 'MP3 · M4A · WAV · WebM · OGG · FLAC · up to 100 MB'}
               </p>
             </div>
@@ -798,7 +802,7 @@ export default function Home() {
             <p className="text-xs text-zinc-700 mt-2">
               {mode === 'transcribe' && 'Keeps the original language.'}
               {mode === 'translate' && 'Translates any language into English.'}
-              {mode === 'compress' && 'Reduces file size · Audio & images · No upload.'}
+              {mode === 'compress' && 'Reduces file size · Audio, video & images · No upload.'}
             </p>
           </div>
 
